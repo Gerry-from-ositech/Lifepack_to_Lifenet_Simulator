@@ -65,7 +65,7 @@ public:
 	bool send_ch_sniffer;
     unsigned char sniffer_send_buff[2000];
     int sniffer_send_index;
-
+    char error_buff[1024 * 3];
 	bool receive_ch_sniffer;
     unsigned char sniffer_receive_buff[2000];
     int sniffer_receive_index;
