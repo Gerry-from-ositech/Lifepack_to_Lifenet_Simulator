@@ -421,6 +421,7 @@ void CSpoofLPDlg::OnBtnOpen()
 	bool fin=false,quit=false,ok=true,offdelay=false;
 	bool continuous;
 	int tries=0;
+	int itcount = 1;
 	int iterations, delay, offDelay;
 	CString csTemp, csPort;
 	time_t to;
@@ -466,10 +467,14 @@ void CSpoofLPDlg::OnBtnOpen()
 	debug4 = false;
 	debug5 = false;
 
+    GetWindowText(csTemp);
+    logFileMessage((LPSTR)(LPCSTR)csTemp);
+
 	while(ALLOK && !cancel)
 	{
 //		GetDlgItem(IDC_BTN_CLOSE)->EnableWindow(FALSE);		// disable the Cancel button
-		logFileMessage("");
+		sprintf(temp_buff,"\nIteration %5d", itcount++);
+		logFileMessage(temp_buff);
 		m_Progress1.SetPos(0);
 
 		justOpened = FALSE;
@@ -567,16 +572,24 @@ if (port.GetCommunicationTimeouts()){
 			resetDialog();
 			return;
 		}
-
+//logFileMessage("Start Zmodem session with sendSRQINIT() and getZMHeader()...");
 		sendZRQINIT();		// and ZRQINIT
 		getZMHeader();		// wait for ZRINIT
 #if LOG_DEBUG == 1
 sprintf(temp_buff,"After first getZMHeader() call headerType = %d, GetLastError() = %d...", headerType, GetLastError() );
 logFileMessage(temp_buff);
 
-sprintf(temp_buff,"After first call to logFileMessage()  GetLastError() = %d...", GetLastError() );
+sprintf(temp_buff,"After first call to getZMHeader()  GetLastError() = %d...", GetLastError() );
 logFileMessage(temp_buff);
 #endif
+
+//if (gotHeader)
+//    sprintf(temp_buff,"After first getZMHeader() gotHeader type = %d GetLastError() = %d", headerType, GetLastError());
+//else
+//    sprintf(temp_buff,"After first getZMHeader() failed to get header GetLastError() = %d", GetLastError() );
+//logFileMessage(temp_buff);
+//sprintf(temp_buff,"After first logFileMessage() GetLastError() = %d",  GetLastError());
+//logFileMessage(temp_buff);
 		if(ALLOK)
 		{
 //logFileMessage("Continuing...........");
@@ -644,8 +657,8 @@ send_ch_sniffer = false;
 
 				default:
 				{
-//sprintf(temp_buff,"Got unexpected header %d", headerType);
-//logFileMessage(temp_buff);
+sprintf(temp_buff,"Got unexpected header %d", headerType);
+logFileMessage(temp_buff);
 					TRACE("got unexpected header\n");
 					logFile(false, ERROR_ZMODEM_HEADER);
 					SetLastError(ERROR_ZMODEM_HEADER);
@@ -655,8 +668,8 @@ send_ch_sniffer = false;
 		}
 		else
 		{
-//sprintf(temp_buff,"Failed ZMODEM_INIT - GetLastError() = %d...", GetLastError() );
-//logFileMessage(temp_buff);
+sprintf(temp_buff,"Failed ZMODEM_INIT (start Zmodem session with Titan) - GetLastError() = %d...", GetLastError() );
+logFileMessage(temp_buff);
 			logFile(false, ERROR_ZMODEM_INIT);
 			SetLastError(ERROR_ZMODEM_INIT);
 		}
@@ -669,18 +682,20 @@ send_ch_sniffer = false;
 		{
 			// show that the file has been fully sent
 			m_Progress1.SetPos(m_Filesize);
-
+Sleep(200);   // delay to see if this fixes seq2 issue
 			ok = sendCommandSeq2();
 
 			if(!ok)
 			{
-				logFile(false, ERROR_ZCOMMAND_2);
+logFileMessage("Seq2 failed after file sent.");
+   			    logFile(false, ERROR_ZCOMMAND_2);
 				SetLastError(ERROR_ZCOMMAND_2);
 			}
 			else
 			{
 				quit=false;
 				tries=0;
+logFileMessage("Seq2 finished OK, Send ZFIN...");
 				sendZFIN();
 
 				while(ALLOK && !quit && !cancel)
@@ -772,9 +787,7 @@ send_ch_sniffer = false;
 				break;
 			}
 
-
 		}
-
 
 
 		// power off and close port
@@ -813,7 +826,7 @@ send_ch_sniffer = false;
 			while((time(0) < to) && !cancel)
 				Pump();
 		}
-	}
+	}  // end of main loop
 
 
 	if(offdelay == false && !error)
@@ -1361,13 +1374,15 @@ void CSpoofLPDlg::getZMHeader()
 	gotHeader = 0;
 	canCount = 0;
 	dleCount = 0;
+
 	getNextCh();
+
 	while(ALLOK && !gotHeader && !cancel)
 	{
 		while (ALLOK && (ch != ZPAD) && !cancel)
 		{
 
-			if(ch == ZCANCEL)
+			if(ch == ZCANCEL)   // Titan canceled ????
 			{
 				canCount ++;
 				if(canCount == 5)
@@ -1446,7 +1461,6 @@ void CSpoofLPDlg::getNextCh()
 {	//
 	unsigned char buf[1];
 	DWORD actual;
-    DWORD dwLastError;
 	//
 	if(m_bWait)
 		GetBlock(buf,1,&actual);
@@ -1457,13 +1471,11 @@ void CSpoofLPDlg::getNextCh()
 		ch = buf[0];
         if (receive_ch_sniffer)
             put_ch_inbuff(ch);
-    }else {
-         dwLastError=GetLastError();
-         sprintf(temp_buff, "Failed getNextCh() with NumOfChar = %d, GetLastError() =  %d", actual, dwLastError);
-         if (dwLastError)
-               SetLastError(0);
-         logFileMessage(temp_buff);
     }
+//    else {
+//         sprintf(temp_buff, "Timeout waiting for byte in getNextCh() with NumOfChar = %d, GetLastError() =  %d", actual, GetLastError());
+//         logFileMessage(temp_buff);
+//    }
 }
 
 //-----------------------------------------------------------------------------
@@ -1622,20 +1634,15 @@ void CSpoofLPDlg::getHexHeader()
 //---Get a byte and retry and wait up to  Mins --------------------------------------------------------------------------
 void CSpoofLPDlg::GetBlock(void *buffer,DWORD max,LPDWORD actual)
 //-----------------------------------------------------------------------------
-{
+{	//Variablen
 	int x;
-    int w = 0;
-    int cnt;
 	//Routine
 	x= ReadBuffer(buffer,max);
 	if(x==0)
 	{
-//logFileMessage("Waiting to get byte from Titan...");
-w = 1;
-        // wait for 2 Hrs 10 seconds at a time
-		for (cnt=0;cnt<1000;cnt++ && !cancel)
+		for (int cnt=0;cnt<1000;cnt++ && !cancel)
 		{
-			Sleep(10);
+			Sleep(15);
 
 			x= ReadBuffer(buffer,max);
 			if(x!=0)
@@ -1644,21 +1651,10 @@ w = 1;
 	}
 	if(x==0)
 	{
-// logFileMessage("Timed out after 10 seconds waiting for a byte from Titan");
- if (receive_ch_sniffer &&  sniffer_receive_index > 0){
-#if LOG_DEBUG == 1
-     logFileMessage("\nBytes received <<<<");
-     hexdump(sniffer_receive_buff, sniffer_receive_index, false);
-     sniffer_receive_index = 0;
-#endif
-}
 		TRACE("Setze Fehler %s\n","ZMODEM_TIMEOUT");
+	logFileMessage("ZMODEM_TIMEOUT in GetBlock() waiting for byte from Titan");
 		SetLastError(ZMODEM_TIMEOUT);
-	} else if (w){
-        //sprintf(temp_buff,"Got the byte waited for after %d seconds", (cnt * 10)/1000);
-        //logFileMessage(temp_buff);
-        ;
-    }
+	}
 	*actual = x;
 }
 
@@ -1882,8 +1878,10 @@ bool CSpoofLPDlg::sendFiles()
 	while(ALLOK && ( i < nSize) && !cancel)
 	{
 		gotfile = Open(".\\sendfile",OPEN_EXISTING);
-     	if(gotfile)
+     	if(gotfile){
 			TRACE("SendFiles filename %s\n",".\\sendfile");
+  logFileMessage("Sending file to Titan...");
+     	}
 		else
       		break;
 		goodOffset = 0;
@@ -1904,11 +1902,15 @@ bool CSpoofLPDlg::sendFiles()
 				fileinfosent=true;
 			}
 			getZMHeader();
+sprintf(temp_buff,"In SendFile() after sendZFILE() and SendFILEINFO() executed getZMHeader(), gotHeader = %d, GetLastError() = %d\n", gotHeader, GetLastError());
+strcat(error_buff, temp_buff);
+
 			if(ALLOK && !cancel)
 			{
 				if(headerType == ZRINIT)
 				{
             		TRACE("got ZRINIT\n");
+logFileMessage("In sendFiles - got ZRINIT from Gateway");
 					tries++;
 				}
 				else if (headerType == ZRPOS)
@@ -1927,8 +1929,6 @@ bool CSpoofLPDlg::sendFiles()
 
 					if(headerType != ZRINIT)
 						rw = false;
-
-
 					sent = true;//
 				}
 				else if(headerType == ZNAK)//nochmal senden
@@ -1951,6 +1951,7 @@ bool CSpoofLPDlg::sendFiles()
 				MessageBox("Error sending ZFILE!", "Error", MB_OK | MB_ICONERROR);
 				logFile(false, ERROR_ZFILE);
 				rw = false;
+strcat(error_buff, "In SendFile(), Failed to start sendFileThread()!\n");
 			}
 		}
 
@@ -2061,6 +2062,7 @@ void CSpoofLPDlg::sendFILEINFO()
 	CRC32 crc32;
 	//
 	buf = new unsigned char[500];
+
 	memset(buf,0,500);
 	//cnt = m_ZModemFile->MakeFileInfo(buf);
 	cnt = MakeFileInfo(buf);
@@ -2122,11 +2124,14 @@ UINT sendFile(LPVOID pParam)
 	int state, erg;
 	bool sentfile = false;
 	bool rw=true;
+	char temp_buff[400];
 	CString csTemp;
 
 	CSpoofLPDlg* pObject = (CSpoofLPDlg*)pParam;
 
 	state = SM_SENDZDATA;
+pObject->logFileMessage("RUNNING SENDfILE THREAD...");
+strcpy(pObject->error_buff, "Running sendFile thread...\n");
 	while(ALLOK && !sentfile && !pObject->cancel)
 	{
 		switch(state)
@@ -2160,8 +2165,12 @@ UINT sendFile(LPVOID pParam)
 				{
 					packetPos = packetBuf;
 					pObject->sendData();
+//sprintf(temp_buff,"SM_SENDDATA: sendData(), GetLastError() = %d\n", GetLastError());
+//strcat(pObject->error_buff, temp_buff);
 					pObject->sendPacket();
 					DWORD err=GetLastError();
+//sprintf(temp_buff,"SM_SENDDATA: sendData(), GetLastError() = %d\n", err);
+//strcat(pObject->error_buff, temp_buff);
 					if(pObject->error == 15 && pObject->goodOffset > 4096)
 					{
 						SetLastError(ERROR_CAUSE_ERROR);
@@ -2170,6 +2179,7 @@ UINT sendFile(LPVOID pParam)
 					else
 					if(err==ZMODEM_TIMEOUT)//got no header
 					{
+strcat(pObject->error_buff, "In sendFile thread SM_SENDDATA: ZMODEM_ERROR_FILE2 got no header\n");
 						TRACE("set error ZMODEM_ERROR_FILE2\n");
 						SetLastError(ZMODEM_ERROR_FILE);
 						rw = false;
@@ -2204,6 +2214,8 @@ UINT sendFile(LPVOID pParam)
 							}
 							else//ZMODEMFILE_ERROR
 							{
+
+strcat(pObject->error_buff, "In sendFile thread SM_SENDDATA: ZMODEM_ERROR_FILE\n");
 								TRACE("set error ZMODEM_ERROR_FILE\n");
 								SetLastError(ZMODEM_ERROR_FILE);
 								rw = false;
@@ -2215,8 +2227,10 @@ UINT sendFile(LPVOID pParam)
 
 			case SM_SENDZEOF:
 				TRACE("in SM_SENDZEOF\n");
-				pObject->getZMHeader();	// GWFdirty
 
+				pObject->getZMHeader();	// GWFdirty
+sprintf(temp_buff,"SendFile thread SM_SENDZEOF: getZMHeader() get ZACK from Titan (containes size of file sent) , GetLastError() = %d\n", GetLastError());
+strcat(pObject->error_buff, temp_buff);
 				if(pObject->error == 16)
 				{
 					// sending nothing here or even a ZACK does not make the
@@ -2235,30 +2249,37 @@ UINT sendFile(LPVOID pParam)
 			case SM_WAITZRINIT:
 				TRACE("in SM_WAITZRINIT\n");
 				pObject->getZMHeader();
+sprintf(temp_buff,"SendFile thread SM_WAITZRINIT: getZMHeader(), GetLastError() = %d\n", GetLastError());
+strcat(pObject->error_buff, temp_buff);
 				if(ALLOK && (pObject->headerType == ZRINIT))
 				{
 					pObject->logFileMessage("Received ZRINIT in reponse to ZEOF");
 					sentfile = true;
 				}
-				else if (ALLOK && pObject->headerType == ZACK)
+				else if (ALLOK && pObject->headerType == ZACK){
+strcat(pObject->error_buff, "SendFile thread SM_WAITZRINIT: Send ZEOF a second time\n");
 					pObject->sendZEOF();
+				}
 				//erweitert ...
 				else if(ALLOK && (pObject->headerType == ZFERR))
 				{
 					TRACE("got ZFERR, finish sending\n");
 					SetLastError(ZMODEM_ERROR_FILE);
+strcat(pObject->error_buff, "SendFile thread SM_WAITZRINIT: got ZFERR, finish sending\n");
 					rw = false;
 				}
 				else if((pObject->headerType == ZCAN))
 				{
 					TRACE("got ZCAN\n");
 					SetLastError(ZMODEM_ERROR_FILE);
+strcat(pObject->error_buff, "SendFile thread SM_WAITZRINIT: got ZCAN from Titan\n");
 					rw = false;
 				}
 				else if((pObject->headerType == ZABORT))
 				{
 					TRACE("got ZABORT\n");
 					SetLastError(ZMODEM_ERROR_FILE);
+strcat(pObject->error_buff, "SendFile thread SM_WAITZRINIT: got ZABORT from Titan\n");
 					rw = false;
 				}
 				else
@@ -2269,6 +2290,7 @@ UINT sendFile(LPVOID pParam)
 					{
 						pObject->sendZEOF();
 						SetLastError(0);
+strcat(pObject->error_buff, "SendFile thread SM_WAITZRINIT: send another ZEOF to Titan\n");
 					}
 					else
 					{
@@ -2515,6 +2537,7 @@ unsigned char data6[256]=
 #define NUM_SENDFILES 6
 
 unsigned long data25_len = 12;
+//  {phy::temp}<CR>
 unsigned char data25[12]=
 {
 	0x7B,
@@ -2830,6 +2853,15 @@ bool CSpoofLPDlg::sendCommandSeq2()
 	sendOK = FALSE;
 	exitCommands = FALSE;
 
+logFileMessage("File sent to Titan, starting sequence2...");
+
+#if LOG_DEBUG == 2
+enable_send_ch_sniffer(true);
+enable_receive_ch_sniffer(true);
+#endif
+
+
+
 	while(ALLOK && loop && !cancel)
 	{
 
@@ -2839,14 +2871,35 @@ bool CSpoofLPDlg::sendCommandSeq2()
 
 				GetCommandData(mainBuf,maxTx,&bytes);	// from the next file
 				sendZCOMMAND();
+
+#if LOG_DEBUG == 2
+logFileMessage("\nSeq2 in SM_SENDZCOMMAND: Call sendZCOMMAND()...>>>>");
+hexdump(sniffer_send_buff, sniffer_send_index, true);
+#endif
 				sendCommand16(bytes, ZCRCW);
+#if LOG_DEBUG == 2
+logFileMessage("\nSeq2 in SM_SENDZCOMMAND: Call sendCommand16..>>>>");
+hexdump(sniffer_send_buff, sniffer_send_index, true);
+#endif
+sprintf(temp_buff,"Seq2 In SM_SENDZCOMMAND: sendZCOMMAND() sendCommand16 send file %d\n", sendfile);
+strcpy(error_buff, temp_buff);
 				state = SM_RECVZACK;
 				break;
 
 			case SM_RECVZACK:
 
 				getZMHeader();
+#if LOG_DEBUG == 2
+logFileMessage("\nSeq2 in SM_RECVZACK: Called getZMHeader()...<<<<");
+hexdump(sniffer_receive_buff, sniffer_receive_index, false);
+#endif
 				err=GetLastError();
+if (gotHeader)
+    sprintf(temp_buff,"Seq2 in SM_RECVZACK: getZMHeader() receive ZACK for file %d  GetLastError() = %d gotHeader type = %d\n", sendfile, err, headerType);
+else
+    sprintf(temp_buff,"Seq2 in SM_RECVZACK: getZMHeader() receive ZACK for file %d GetLaseError() = %d Failed to get header!\n", sendfile, err);
+strcat(error_buff, temp_buff);
+
 				if(ALLOK && (headerType == ZACK))
 				{
 					if(recvOK)
@@ -2879,6 +2932,7 @@ bool CSpoofLPDlg::sendCommandSeq2()
 				}
 				else
 				{
+logFile(false, err);
 					logFile(false, ERROR_RECV_ZACK);
 					SetLastError(ERROR_RECV_ZACK);
 					ret = false;
@@ -2891,12 +2945,23 @@ bool CSpoofLPDlg::sendCommandSeq2()
 				recvOK = FALSE;
 
 				getZMHeader();
+#if LOG_DEBUG == 2
+logFileMessage("\nSeq2 in SM_RECVOK: Call getZMHeader()...<<<<");
+hexdump(sniffer_receive_buff, sniffer_receive_index, false);
+#endif
 				err=GetLastError();
+if (gotHeader)
+    sprintf(temp_buff,"Seq2 in SM_RECVZOC: getZMHeader() receive ZACK for file %d  GetLastError() = %d gotHeader type = %d\n", sendfile, err, headerType);
+else
+    sprintf(temp_buff,"Seq2 in SM_RECVZOK: getZMHeader() receive ZACK for file %d GetLaseError() = %d Failed to get header!\n", sendfile, err);
+strcat(error_buff, temp_buff);
+
 				if(ALLOK && (headerType == ZDATA) && !cancel)
 				{
 					receiveData();
 					if(ALLOK)
 					{
+strcat(error_buff,"Seq2 in SM_RECVOK: Send ZACK...\n");
 						sendZACK();
 						if(recvResponse)
 							state = SM_RECVRESP;
@@ -2941,12 +3006,17 @@ bool CSpoofLPDlg::sendCommandSeq2()
 				recvResponse = FALSE;
 				getZMHeader();
 				err=GetLastError();
+sprintf(temp_buff,"Seq2 in SM_RECVRESP: getZMHeader() sentfile %d GetLastError() = %d\n", sendfile, err);
+strcpy(error_buff, temp_buff);
 				if(ALLOK && (headerType == ZDATA) && !cancel)
 				{
 					receiveData();
+sprintf(temp_buff,"Seq2 in SM_RECVRESP: back from reciveData() sentfile %d GetLastError() = %d\n", sendfile, GetLastError());
+strcat(error_buff, temp_buff);
 					if(ALLOK)
 					{
 						SetFlags();
+strcat(error_buff,"Seq2 in SM_RECVRESP: Send ZACK...\n");
 						sendZACK();
 						if(sendResponse || haveControl || sendOK || sendTime)
 							state = SM_SENDDATA;
@@ -3000,6 +3070,8 @@ bool CSpoofLPDlg::sendCommandSeq2()
 				SetFlags();
 				sendZCOMMANDDATA();
 				sendCommand16(bytes, ZCRCW);
+sprintf(temp_buff,"Seq2 in SM_SENDDATA: sendZCOMMANDDATA() sendCommand16() sentfile %d \n", sendfile);
+strcpy(error_buff, temp_buff);
 				state = SM_RECVZACK;
 				break;
 
@@ -3052,6 +3124,11 @@ bool CSpoofLPDlg::sendCommandSeq2()
 
 		}//switch
 	}//while
+
+#if LOG_DEBUG == 2
+enable_send_ch_sniffer(false);
+enable_receive_ch_sniffer(false);
+#endif
 	return ret;
 }
 
@@ -3085,9 +3162,11 @@ bool CSpoofLPDlg::sendCommandSeq1()
 		switch(state)
 		{
 			case SM_SENDZCOMMAND:
-//logFileMessage("SM_SENDZCOMMAND: call sendZCommand...");
+sprintf(temp_buff,"Seq1 sendZCOMMAND() sendCommand16 send file %d\n", sendfile);
+strcpy(error_buff, temp_buff);
 				GetCommandData(mainBuf,maxTx,&bytes);	// from the next file	// GWFhere
 				sendZCOMMAND();
+
 #if LOG_DEBUG == 1
 sprintf(temp_buff,"\nSeq1 in SM_SENDZCOMMAND: Call sendZCOMMAND()...>>>>");
 logFileMessage(temp_buff);
@@ -3099,6 +3178,7 @@ sprintf(temp_buff,"\nSeq1 in SM_SENDZCOMMAND: Call sendCommand16..>>>>");
 logFileMessage(temp_buff);
 hexdump(sniffer_send_buff, sniffer_send_index, true);
 #endif
+
 				state = SM_RECVZACK;
 				break;
 
@@ -3118,6 +3198,11 @@ hexdump(sniffer_receive_buff, sniffer_receive_index, false);
 sprintf(temp_buff,"Seq1 in SM_RECVZACK: After getZMHeader() headerType = %d, GetLastError() = %d...", headerType, err);
 logFileMessage(temp_buff);
 #endif
+if (gotHeader)
+    sprintf(temp_buff,"Seq1 in SM_RECVZACK: getZMHeader() receive ZACK for file %d GetLastError() = %d gotHeader type = %d\n", sendfile, err, headerType);
+else
+    sprintf(temp_buff,"Seq1 in SM_RECVZACK: getZMHeader() receive ZACK for file %d GetLastError() = %d Failed to get header!\n", sendfile, err);
+strcat(error_buff, temp_buff);
 				if(ALLOK && (headerType == ZACK))
 				{
 					if(recvOK)
@@ -3169,6 +3254,8 @@ logFileMessage(temp_buff);
 hexdump(sniffer_receive_buff, sniffer_receive_index, false);
 #endif
 				err=GetLastError();
+sprintf(temp_buff,"Seq1 in SM_RECVOK: getZMHeader() sentfile %d GetLastError() = %d\n", sendfile, err);
+strcpy(error_buff, temp_buff);
 				if(ALLOK && (headerType == ZDATA))
 				{
 					receiveData();
@@ -3186,6 +3273,7 @@ hexdump(sniffer_receive_buff, sniffer_receive_index, false);
 logFileMessage("SendZACK >>>>") ;
 hexdump(sniffer_send_buff, sniffer_send_index, true);
 #endif
+strcat(error_buff,"Seq1 in SM_RECVOK: Send ZACK...\n");
 						if(recvResponse)
 						{
 							state = SM_RECVRESP;
@@ -3248,6 +3336,8 @@ logFileMessage("\nSeq1 in SM_RECVRESP: Call getZMHeader()...<<<<");
 hexdump(sniffer_receive_buff, sniffer_receive_index, false);
 #endif
 				err=GetLastError();
+sprintf(temp_buff,"Seq1 in SM_RECVRESP: getZMHeader() sentfile %d GetLastError() = %d\n", sendfile, err);
+strcpy(error_buff, temp_buff);
 				if(ALLOK && (headerType == ZDATA))
 				{
 					receiveData();
@@ -3255,6 +3345,9 @@ hexdump(sniffer_receive_buff, sniffer_receive_index, false);
 logFileMessage("\nSeq1 in SM_RECVRESP: receive data from Titan <<<<");
 hexdump(sniffer_receive_buff, sniffer_receive_index, false);
 #endif
+sprintf(temp_buff,"Seq1 in SM_RECVRESP: back from reciveData() sentfile %d GetLastError() = %d\n", sendfile, GetLastError());
+strcat(error_buff, temp_buff);
+
 					if(ALLOK)
 					{
 						SetFlags();
@@ -3273,6 +3366,7 @@ hexdump(sniffer_receive_buff, sniffer_receive_index, false);
 logFileMessage("SendZACK >>>>") ;
 hexdump(sniffer_send_buff, sniffer_send_index, true);
 #endif
+strcat(error_buff,"Seq1 in SM_RECVRESP: Send ZACK...\n");
 						if(sendResponse || haveControl || sendOK || sendTime)
 							state = SM_SENDDATA;
 						else
@@ -3390,6 +3484,8 @@ logFileMessage(temp_buff);
    hexdump(sniffer_send_buff, sniffer_send_index, true);
 #endif
   // enable_send_ch_sniffer(false);
+sprintf(temp_buff,"Seq1 in SM_SENDDATA: sendZCOMMANDDATA() sendCommand16() sentfile %d \n", sendfile);
+strcpy(error_buff, temp_buff);
 
 				}
 
@@ -3417,8 +3513,11 @@ logFileMessage(temp_buff);
 hexdump(sniffer_receive_buff, sniffer_receive_index, false);
 #endif
 				err=GetLastError();
+sprintf(temp_buff,"Seq1 in SM_RECVDATA: getZMHeader() sentfile %d GetLastError() = %d\n", sendfile, err);
+strcpy(error_buff, temp_buff);
 				if(ALLOK && (headerType == ZDATA))
 				{
+strcat(error_buff, "Seq1 in SM_RECVDATA: receiveData()...")	;
 					receiveData();
 					if(ALLOK)
 					{
@@ -3429,6 +3528,7 @@ hexdump(sniffer_receive_buff, sniffer_receive_index, false);
 				        }
 
 						SetFlags();
+strcat(error_buff, "Seq1 in SM_RECVDATA: receiveData() OK sendZACK...")	;
 						sendZACK();
 
 						if(sendResponse || haveControl || sendOK || sendTime)
@@ -3438,6 +3538,7 @@ hexdump(sniffer_receive_buff, sniffer_receive_index, false);
 					}
 					else
 					{
+strcat(error_buff, "Seq1 in SM_RECVDATA: got error1 in receiveData()")	;
 						logFile(false, ERROR_RECV_DATA);
 						SetLastError(ERROR_RECV_DATA);
 						ret = false;
@@ -3447,6 +3548,7 @@ hexdump(sniffer_receive_buff, sniffer_receive_index, false);
 				else
 				if(ALLOK && (headerType == ZCAN))
 				{
+strcat(error_buff, "Seq1 in SM_RECVDATA: got ZCAN from receiveData()")	;
 					logFile(false, ERROR_RECV_ZCAN);
 					SetLastError(ERROR_RECV_ZCAN);
 					ret = false;
@@ -3454,6 +3556,7 @@ hexdump(sniffer_receive_buff, sniffer_receive_index, false);
 				}
 				else
 				{
+strcat(error_buff, "Seq1 in SM_RECVDATA: got error 2 from receiveData()")	;
 					logFile(false, ERROR_RECV_DATA);
 					SetLastError(ERROR_RECV_DATA);
 					ret = false;
@@ -3885,11 +3988,16 @@ void CSpoofLPDlg::logFile(bool success, int error)
 	CFile file;
 	CFileException ex;
 	BOOL bResult;
+	DWORD dwLastError;
+
+    dwLastError = GetLastError();
 
 	if( !file.Open(".\\log.txt", CFile::modeWrite | CFile::modeCreate | CFile:: modeNoTruncate, &ex ) )
 	{
 		return;
 	}
+
+	SetLastError(dwLastError);
 
 	/* we now go to the end of the file */
 	bResult = FALSE;
@@ -3931,6 +4039,11 @@ void CSpoofLPDlg::logFile(bool success, int error)
 	bResult = FALSE;
 	TRY
 	{
+
+if (!success && error_buff[0] != 0){
+	file.Write(error_buff, strlen(error_buff));
+	error_buff[0] = 0;
+}
 		file.Write(tem, strlen(tem));
 		bResult = TRUE; // success
 	}
@@ -3940,6 +4053,8 @@ void CSpoofLPDlg::logFile(bool success, int error)
 	{
 		return;
 	}
+
+
 
 	/*  make sure that we close the file when we finish the writing process */
 	file.Flush();
@@ -3952,11 +4067,17 @@ void CSpoofLPDlg::logFileMessage(char *message)
 	CFile file;
 	CFileException ex;
 	BOOL bResult;
+	DWORD dwLastError;
+
+    dwLastError = GetLastError();
+
 
 	if( !file.Open(".\\log.txt", CFile::modeWrite | CFile::modeCreate | CFile:: modeNoTruncate, &ex ) )
 	{
 		return;
 	}
+
+	SetLastError(dwLastError);
 
 	/* we now go to the end of the file */
 	bResult = FALSE;
@@ -3987,7 +4108,7 @@ void CSpoofLPDlg::logFileMessage(char *message)
 		bResult = TRUE; // success
 	}
 	END_TRY
-SetLastError(0);
+//SetLastError(0);
 	if(!bResult)
 	{
 		return;
