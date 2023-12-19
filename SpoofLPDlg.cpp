@@ -682,7 +682,7 @@ logFileMessage(temp_buff);
 		{
 			// show that the file has been fully sent
 			m_Progress1.SetPos(m_Filesize);
-Sleep(200);   // delay to see if this fixes seq2 issue
+Sleep(2000);   // delay to see if this fixes seq2 issue
 			ok = sendCommandSeq2();
 
 			if(!ok)
@@ -738,9 +738,10 @@ logFileMessage("Seq2 finished OK, Send ZFIN...");
 		if(cancel)
 			break;
 
-		// Delay after sending file ************************
-		if(ALLOK && !cancel)
-		{
+		// delay after sending file ************************
+//		if(ALLOK && !cancel)
+        if (!cancel)   // change so we do a power off delay before turning power off with or without an error condition
+		{              // this should give titan enough time befor power is turned off
 			GetDlgItem(IDC_EDIT_OFF_DELAY)->GetWindowText(csTemp);
 			offDelay = atoi(csTemp);
 			if(offDelay)
@@ -828,7 +829,7 @@ logFileMessage("Seq2 finished OK, Send ZFIN...");
 		}
 	}  // end of main loop
 
-
+    // test terminated reset User interface
 	if(offdelay == false && !error)
 	{
 		offDelay = atoi(csTemp);
@@ -837,7 +838,7 @@ logFileMessage("Seq2 finished OK, Send ZFIN...");
 			to = time(0) + offDelay;
 			while(1 && !cancel)
 			{
-				csTemp.Format("Performing Power off Delay...%d", to - time(0));
+				csTemp.Format("Performing Power off Delay.....%d", to - time(0));
 				GetDlgItem(IDC_LBL_STATUS)->SetWindowText(csTemp);
 				if(time(0) > to)
 					break;
@@ -2868,7 +2869,9 @@ enable_receive_ch_sniffer(true);
 		switch(state)
 		{
 			case SM_SENDZCOMMAND:
-
+if ( sendfile == 26){
+	Sleep(1000);
+}
 				GetCommandData(mainBuf,maxTx,&bytes);	// from the next file
 				sendZCOMMAND();
 
