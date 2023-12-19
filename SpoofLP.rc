@@ -79,7 +79,7 @@ CAPTION "About LIFEPAK to LIFENET Simulator"
 FONT 8, "MS Sans Serif"
 BEGIN
     ICON            IDR_MAINFRAME,IDC_STATIC,11,17,20,20
-    LTEXT           "LIFEPAK to LIFENET Simulator V2.0.0.3",IDC_STATIC,40,
+    LTEXT           "LIFEPAK to LIFENET Simulator V2.0.0.4",IDC_STATIC,40,
                     10,132,8,SS_NOPREFIX
     LTEXT           "Copyright (C) 2023 Ositech Communications, Inc.",
                     IDC_STATIC,40,25,181,8
@@ -134,8 +134,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 2,0,0,3
- PRODUCTVERSION 2,0,0,3
+ FILEVERSION 2,0,0,4
+ PRODUCTVERSION 2,0,0,4
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -153,14 +153,14 @@ BEGIN
             VALUE "Comments", "\0"
             VALUE "CompanyName", "\0"
             VALUE "FileDescription", "\0"
-            VALUE "FileVersion", "2, 0, 0, 3\0"
+            VALUE "FileVersion", "2, 0, 0, 4\0"
             VALUE "InternalName", "LIFEPAK to LIFENET Simulator\0"
             VALUE "LegalCopyright", "Copyright (C) 2023 Ositech Communications, Inc.\0"
             VALUE "LegalTrademarks", "\0"
             VALUE "OriginalFilename", "SpoofLP.EXE\0"
             VALUE "PrivateBuild", "\0"
             VALUE "ProductName", "\0"
-            VALUE "ProductVersion", "2, 0, 0, 3\0"
+            VALUE "ProductVersion", "2, 0, 0, 4\0"
             VALUE "SpecialBuild", "\0"
         END
     END
